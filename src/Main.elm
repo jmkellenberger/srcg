@@ -8,26 +8,85 @@ import Json.Decode as Decode
 import List.Extra
 
 
+type Priority
+    = Attributes
+    | Magic
+    | Metatype
+    | Skills
+    | Resources
+
+
+priorityToString : Priority -> String
+priorityToString p =
+    case p of
+        Attributes ->
+            "Attributes"
+
+        Magic ->
+            "Magic"
+
+        Metatype ->
+            "Metatype"
+
+        Skills ->
+            "Skills"
+
+        Resources ->
+            "Resources"
+
+
 type alias Model =
-    { priority : List String
-    , draggedItem : Maybe String
+    { priority : List Priority
+    , draggedItem : Maybe Priority
     }
 
 
 init : Model
 init =
     { priority =
-        [ "Attributes"
-        , "Magic"
-        , "Metatype"
-        , "Resources"
-        , "Skills"
+        [ Attributes
+        , Magic
+        , Metatype
+        , Resources
+        , Skills
         ]
     , draggedItem = Nothing
     }
 
 
-setDraggedItem : String -> Model -> Model
+priorityToValue : ( Int, Priority ) -> ( Priority, String )
+priorityToValue ( idx, priority ) =
+    let
+        value =
+            case priority of
+                Metatype ->
+                    if idx == 0 then
+                        "Metahuman"
+
+                    else
+                        "Human"
+
+                Magic ->
+                    case idx of
+                        0 ->
+                            "H Mage"
+
+                        1 ->
+                            "H Adept/M Mage"
+
+                        2 ->
+                            "M Adept"
+
+                        _ ->
+                            "Mundane"
+
+                _ ->
+                    String.fromInt idx
+    in
+    ( priority, value )
+
+
+setDraggedItem : Priority -> Model -> Model
 setDraggedItem item model =
     { model | draggedItem = Just item }
 
@@ -37,7 +96,7 @@ clearDraggedItem model =
     { model | draggedItem = Nothing }
 
 
-updatePriorities : String -> Model -> Model
+updatePriorities : Priority -> Model -> Model
 updatePriorities target model =
     case model.draggedItem of
         Just dragged ->
@@ -53,42 +112,46 @@ updatePriorities target model =
             model
 
 
-moveItem : String -> String -> List String -> List String
+moveItem : Priority -> Priority -> List Priority -> List Priority
 moveItem dragged target list =
     let
+        withoutDragged : List Priority
         withoutDragged =
             List.filter (\item -> item /= dragged) list
 
+        originalIdx : Maybe Int
         originalIdx =
             List.Extra.elemIndex dragged list
 
+        newIdx : Maybe Int
         newIdx =
             List.Extra.elemIndex target list
-    in
-    case ( originalIdx, newIdx ) of
-        ( Just orig, Just new ) ->
-            if orig < new then
-                let
-                    ( before, after ) =
-                        List.Extra.splitAt (new + 1) withoutDragged
-                in
-                before ++ dragged :: after
+
+        newIdxFinal o n =
+            if o < n then
+                n + 1
 
             else
-                let
-                    ( before, after ) =
-                        List.Extra.splitAt new withoutDragged
-                in
-                before ++ dragged :: after
+                n
+    in
+    Maybe.map2 newIdxFinal originalIdx newIdx
+        |> Maybe.map (\newFinalIdx -> insertAt newFinalIdx dragged withoutDragged)
+        |> Maybe.withDefault list
 
-        _ ->
-            list
+
+insertAt : Int -> a -> List a -> List a
+insertAt idx elem list =
+    let
+        ( before, after ) =
+            List.Extra.splitAt idx list
+    in
+    before ++ elem :: after
 
 
 type Msg
-    = StartDrag String
-    | DragOver String
-    | DropOn String
+    = StartDrag Priority
+    | DragOver Priority
+    | DropOn Priority
 
 
 update : Msg -> Model -> Model
@@ -111,23 +174,26 @@ view model =
     Html.div [] [ viewPriorties model.priority ]
 
 
-viewPriorties : List String -> Html Msg
+viewPriorties : List Priority -> Html Msg
 viewPriorties priorities =
     Html.ul [ Attributes.id "priorities" ]
-        (List.map viewPriority priorities)
+        (List.indexedMap
+            (\i -> viewPriority << priorityToValue << Tuple.pair i)
+            priorities
+        )
 
 
-viewPriority : String -> Html Msg
-viewPriority p =
+viewPriority : ( Priority, String ) -> Html Msg
+viewPriority ( p, v ) =
     Html.li
-        [ Attributes.id p
+        [ Attributes.id (priorityToString p)
         , Attributes.draggable "true"
         , Attributes.class "draggable-item"
         , Events.on "dragstart" (Decode.succeed (StartDrag p))
         , Events.preventDefaultOn "drop" (Decode.succeed ( DropOn p, True ))
         , Events.preventDefaultOn "dragover" (Decode.succeed ( DragOver p, True ))
         ]
-        [ Html.text p ]
+        [ Html.text (priorityToString p ++ " - " ++ v) ]
 
 
 main : Program () Model Msg
