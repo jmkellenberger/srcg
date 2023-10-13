@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import AttributesSpender
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attributes
@@ -38,20 +39,50 @@ priorityToString p =
 type alias Model =
     { priority : List Priority
     , draggedItem : Maybe Priority
+    , attributesModel : AttributesSpender.Model
     }
 
 
 init : Model
 init =
-    { priority =
-        [ Attributes
-        , Magic
-        , Metatype
-        , Resources
-        , Skills
-        ]
+    let
+        priorities =
+            [ Magic
+            , Attributes
+            , Metatype
+            , Resources
+            , Skills
+            ]
+    in
+    { priority = priorities
     , draggedItem = Nothing
+    , attributesModel = AttributesSpender.init
     }
+
+
+attributesBudget : List Priority -> Int
+attributesBudget priorities =
+    priorities
+        |> List.Extra.findIndex (\p -> p == Attributes)
+        |> Maybe.map
+            (\i ->
+                case i of
+                    0 ->
+                        50
+
+                    1 ->
+                        40
+
+                    2 ->
+                        30
+
+                    3 ->
+                        25
+
+                    _ ->
+                        20
+            )
+        |> Maybe.withDefault 20
 
 
 priorityToValue : ( Int, Priority ) -> ( Priority, String )
@@ -119,23 +150,23 @@ moveItem dragged target list =
         withoutDragged =
             List.filter (\item -> item /= dragged) list
 
-        originalIdx : Maybe Int
-        originalIdx =
+        startIdx : Maybe Int
+        startIdx =
             List.Extra.elemIndex dragged list
 
-        newIdx : Maybe Int
-        newIdx =
+        targetIdx : Maybe Int
+        targetIdx =
             List.Extra.elemIndex target list
 
-        newIdxFinal o n =
+        splitIdx o n =
             if o < n then
                 n + 1
 
             else
                 n
     in
-    Maybe.map2 newIdxFinal originalIdx newIdx
-        |> Maybe.map (\newFinalIdx -> insertAt newFinalIdx dragged withoutDragged)
+    Maybe.map2 splitIdx startIdx targetIdx
+        |> Maybe.map (\idx -> insertAt idx dragged withoutDragged)
         |> Maybe.withDefault list
 
 
@@ -171,7 +202,10 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    Html.div [] [ viewPriorties model.priority ]
+    Html.div []
+        [ viewPriorties model.priority
+        , AttributesSpender.view model.attributesModel (attributesBudget model.priority)
+        ]
 
 
 viewPriorties : List Priority -> Html Msg
