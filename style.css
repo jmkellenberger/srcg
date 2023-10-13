@@ -11,3 +11,22 @@
 a {
   color: #60b5cc;
 }
+
+#priorities {
+  width: 200px;
+  border: 1px solid black;
+  padding: 10px;
+  list-style: none;
+}
+
+.draggable-item {
+  background-color: lightgray;
+  padding: 10px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.draggable-item:hover {
+  background-color: #f5f5f5;
+}
