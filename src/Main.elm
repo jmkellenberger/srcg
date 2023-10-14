@@ -1,6 +1,5 @@
 module Main exposing (..)
 
-import AttributesSpender
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attributes
@@ -15,6 +14,12 @@ type Priority
     | Metatype
     | Skills
     | Resources
+
+
+type Attribute
+    = Strength
+    | Intelligence
+    | Dexterity
 
 
 priorityToString : Priority -> String
@@ -36,10 +41,23 @@ priorityToString p =
             "Resources"
 
 
+attributeToString : Attribute -> String
+attributeToString a =
+    case a of
+        Strength ->
+            "Strength"
+
+        Intelligence ->
+            "Intelligence"
+
+        Dexterity ->
+            "Dexterity"
+
+
 type alias Model =
     { priority : List Priority
     , draggedItem : Maybe Priority
-    , attributesModel : AttributesSpender.Model
+    , attributes : List ( Attribute, Int )
     }
 
 
@@ -56,7 +74,7 @@ init =
     in
     { priority = priorities
     , draggedItem = Nothing
-    , attributesModel = AttributesSpender.init
+    , attributes = [ ( Strength, 1 ), ( Intelligence, 1 ), ( Dexterity, 1 ) ]
     }
 
 
@@ -117,6 +135,11 @@ priorityToValue ( idx, priority ) =
     ( priority, value )
 
 
+attributeToValue : ( Attribute, Int ) -> ( Attribute, String )
+attributeToValue ( attribute, value ) =
+    ( attribute, String.fromInt value )
+
+
 setDraggedItem : Priority -> Model -> Model
 setDraggedItem item model =
     { model | draggedItem = Just item }
@@ -148,7 +171,7 @@ moveItem dragged target list =
     let
         withoutDragged : List Priority
         withoutDragged =
-            List.filter (\item -> item /= dragged) list
+            List.filter ((/=) dragged) list
 
         startIdx : Maybe Int
         startIdx =
@@ -158,6 +181,7 @@ moveItem dragged target list =
         targetIdx =
             List.Extra.elemIndex target list
 
+        splitIdx : number -> number -> number
         splitIdx o n =
             if o < n then
                 n + 1
@@ -183,6 +207,8 @@ type Msg
     = StartDrag Priority
     | DragOver Priority
     | DropOn Priority
+    | Increment Attribute
+    | Decrement Attribute
 
 
 update : Msg -> Model -> Model
@@ -199,22 +225,57 @@ update msg model =
                 |> updatePriorities target
                 |> clearDraggedItem
 
+        Increment attribute ->
+            if attributesBudget model.priority > sumAttributes model.attributes then
+                { model | attributes = adjustAttribute 1 attribute model.attributes }
+
+            else
+                model
+
+        Decrement attribute ->
+            { model | attributes = adjustAttribute -1 attribute model.attributes }
+
+
+adjustAttribute : Int -> Attribute -> List ( Attribute, Int ) -> List ( Attribute, Int )
+adjustAttribute val attr attrs =
+    List.map
+        (\( a, v ) ->
+            if a == attr && (v + val) > 0 then
+                ( a, v + val )
+
+            else
+                ( a, v )
+        )
+        attrs
+
+
+sumAttributes : List ( Attribute, Int ) -> Int
+sumAttributes attrs =
+    List.foldl ((+) << Tuple.second) 0 attrs - List.length attrs
+
 
 view : Model -> Html Msg
 view model =
     Html.div []
-        [ viewPriorties model.priority
-        , AttributesSpender.view model.attributesModel (attributesBudget model.priority)
+        [ viewPriorities model.priority
+        , viewAttributes model.attributes (attributesBudget model.priority)
         ]
 
 
-viewPriorties : List Priority -> Html Msg
-viewPriorties priorities =
+viewPriorities : List Priority -> Html Msg
+viewPriorities priorities =
     Html.ul [ Attributes.id "priorities" ]
         (List.indexedMap
             (\i -> viewPriority << priorityToValue << Tuple.pair i)
             priorities
         )
+
+
+viewAttributes : List ( Attribute, Int ) -> Int -> Html Msg
+viewAttributes attrs budget =
+    Html.div [] <|
+        Html.p [] [ Html.text ("Attributes Budget: " ++ String.fromInt (budget - sumAttributes attrs)) ]
+            :: List.map viewAttribute attrs
 
 
 viewPriority : ( Priority, String ) -> Html Msg
@@ -228,6 +289,15 @@ viewPriority ( p, v ) =
         , Events.preventDefaultOn "dragover" (Decode.succeed ( DragOver p, True ))
         ]
         [ Html.text (priorityToString p ++ " - " ++ v) ]
+
+
+viewAttribute : ( Attribute, Int ) -> Html Msg
+viewAttribute ( attr, v ) =
+    Html.div []
+        [ Html.p [] [ Html.text (attributeToString attr ++ ": " ++ String.fromInt v) ]
+        , Html.button [ Events.onClick (Decrement attr) ] [ Html.text "-" ]
+        , Html.button [ Events.onClick (Increment attr) ] [ Html.text "+" ]
+        ]
 
 
 main : Program () Model Msg
